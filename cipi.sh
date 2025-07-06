@@ -1,17 +1,20 @@
 #!/bin/bash
 
 #################################################### CONFIGURATION ###
-BUILD=202112181
+BUILD=202412010
 PASS=$(openssl rand -base64 32|sha256sum|base64|head -c 32| tr '[:upper:]' '[:lower:]')
 DBPASS=$(openssl rand -base64 24|sha256sum|base64|head -c 32| tr '[:upper:]' '[:lower:]')
 SERVERID=$(openssl rand -base64 12|sha256sum|base64|head -c 32| tr '[:upper:]' '[:lower:]')
 REPO=andreapollastri/cipi
-if [ -z "$1" ];
+if [ -z "$1" ]; then
     BRANCH=latest
-then
+else
     BRANCH=$1
 fi
 
+# Detect Ubuntu version
+UBUNTU_VERSION=$(lsb_release -rs)
+UBUNTU_CODENAME=$(lsb_release -cs)
 
 ####################################################   CLI TOOLS   ###
 reset=$(tput sgr0)
@@ -32,11 +35,7 @@ bgyellow=$(tput setab 4)
 bgblue=$(tput setab 4)
 bgpurple=$(tput setab 5)
 
-
-
 #################################################### CIPI SETUP ######
-
-
 
 # LOGO
 clear
@@ -49,21 +48,29 @@ echo "██      ██ ██      ██" 
 echo " ██████ ██ ██      ██" 
 echo ""
 echo "Installation has been started... Hold on!"
+echo "Ubuntu Version: $UBUNTU_VERSION ($UBUNTU_CODENAME)"
 echo "${reset}"
 sleep 3s
-
-
 
 # OS CHECK
 clear
 clear
 echo "${bggreen}${black}${bold}"
 echo "OS check..."
+echo "Detected Ubuntu $UBUNTU_VERSION ($UBUNTU_CODENAME)"
 echo "${reset}"
 sleep 1s
 
 ID=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"')
 VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
+
+# Check if Ubuntu version is supported
+if [[ "$ID" != "ubuntu" ]]; then
+    echo "${bgred}${white}${bold}"
+    echo "This script is designed for Ubuntu only."
+    echo "${reset}"
+    exit 1
+fi
 
 # ROOT CHECK
 clear
@@ -83,8 +90,6 @@ else
     exit 1
 fi
 
-
-
 # BASIC SETUP
 clear
 clear
@@ -93,9 +98,9 @@ echo "Base setup..."
 echo "${reset}"
 sleep 1s
 
+# Update package lists and install essential packages
 sudo apt-get update
-sudo apt-get -y install software-properties-common curl wget nano vim rpl sed zip unzip openssl expect dirmngr apt-transport-https lsb-release ca-certificates dnsutils dos2unix zsh htop ffmpeg
-
+sudo apt-get -y install software-properties-common curl wget nano vim rpl sed zip unzip openssl expect dirmngr apt-transport-https lsb-release ca-certificates dnsutils dos2unix zsh htop ffmpeg gnupg2
 
 # GET IP
 clear
@@ -106,7 +111,6 @@ echo "${reset}"
 sleep 1s
 
 IP=$(curl -s https://checkip.amazonaws.com)
-
 
 # MOTD WELCOME MESSAGE
 clear
@@ -129,8 +133,6 @@ With great power comes great responsibility...
 
 EOF
 
-
-
 # SWAP
 clear
 echo "${bggreen}${black}${bold}"
@@ -142,8 +144,6 @@ sudo /bin/dd if=/dev/zero of=/var/swap.1 bs=1M count=1024
 sudo /sbin/mkswap /var/swap.1
 sudo /sbin/swapon /var/swap.1
 
-
-
 # ALIAS
 clear
 echo "${bggreen}${black}${bold}"
@@ -154,8 +154,6 @@ sleep 1s
 shopt -s expand_aliases
 alias ll='ls -alF'
 
-
-
 # CIPI DIRS
 clear
 echo "${bggreen}${black}${bold}"
@@ -163,12 +161,10 @@ echo "Cipi directories..."
 echo "${reset}"
 sleep 1s
 
-sudo mkdir /etc/cipi/
+sudo mkdir -p /etc/cipi/
 sudo chmod o-r /etc/cipi
-sudo mkdir /var/cipi/
+sudo mkdir -p /var/cipi/
 sudo chmod o-r /var/cipi
-
-
 
 # USER
 clear
@@ -184,7 +180,6 @@ sudo useradd -m -s /bin/bash cipi
 echo "cipi:$PASS"|sudo chpasswd
 sudo usermod -aG sudo cipi
 
-
 # NGINX
 clear
 echo "${bggreen}${black}${bold}"
@@ -195,12 +190,7 @@ sleep 1s
 sudo apt-get -y install nginx-core
 sudo systemctl start nginx.service
 sudo rpl -i -w "http {" "http { limit_req_zone \$binary_remote_addr zone=one:10m rate=1r/s; fastcgi_read_timeout 300;" /etc/nginx/nginx.conf
-sudo rpl -i -w "http {" "http { limit_req_zone \$binary_remote_addr zone=one:10m rate=1r/s; fastcgi_read_timeout 300;" /etc/nginx/nginx.conf
 sudo systemctl enable nginx.service
-
-
-
-
 
 # FIREWALL
 clear
@@ -211,7 +201,7 @@ sleep 1s
 
 sudo apt-get -y install fail2ban
 JAIL=/etc/fail2ban/jail.local
-sudo unlink JAIL
+sudo rm -f $JAIL
 sudo touch $JAIL
 sudo cat > "$JAIL" <<EOF
 [DEFAULT]
@@ -228,9 +218,6 @@ sudo ufw allow http
 sudo ufw allow https
 sudo ufw allow "Nginx Full"
 
-
-
-
 # PHP
 clear
 echo "${bggreen}${black}${bold}"
@@ -238,120 +225,69 @@ echo "PHP setup..."
 echo "${reset}"
 sleep 1s
 
-
+# Add Ondřej Surý's PPA for PHP
 sudo add-apt-repository -y ppa:ondrej/php
 sudo apt-get update
 
-sudo apt-get -y install php7.4-fpm
-sudo apt-get -y install php7.4-common
-sudo apt-get -y install php7.4-curl
-sudo apt-get -y install php7.4-openssl
-sudo apt-get -y install php7.4-bcmath
-sudo apt-get -y install php7.4-mbstring
-sudo apt-get -y install php7.4-tokenizer
-sudo apt-get -y install php7.4-mysql
-sudo apt-get -y install php7.4-sqlite3
-sudo apt-get -y install php7.4-pgsql
-sudo apt-get -y install php7.4-redis
-sudo apt-get -y install php7.4-memcached
-sudo apt-get -y install php7.4-json
-sudo apt-get -y install php7.4-zip
-sudo apt-get -y install php7.4-xml
-sudo apt-get -y install php7.4-soap
-sudo apt-get -y install php7.4-gd
-sudo apt-get -y install php7.4-imagick
-sudo apt-get -y install php7.4-fileinfo
-sudo apt-get -y install php7.4-imap
-sudo apt-get -y install php7.4-cli
-PHPINI=/etc/php/7.4/fpm/conf.d/cipi.ini
-sudo touch $PHPINI
-sudo cat > "$PHPINI" <<EOF
+# Function to install PHP version with all extensions
+install_php_version() {
+    local version=$1
+    echo "Installing PHP $version..."
+    
+    sudo apt-get -y install php$version-fpm
+    sudo apt-get -y install php$version-common
+    sudo apt-get -y install php$version-curl
+    sudo apt-get -y install php$version-openssl
+    sudo apt-get -y install php$version-bcmath
+    sudo apt-get -y install php$version-mbstring
+    sudo apt-get -y install php$version-tokenizer
+    sudo apt-get -y install php$version-mysql
+    sudo apt-get -y install php$version-sqlite3
+    sudo apt-get -y install php$version-pgsql
+    sudo apt-get -y install php$version-redis
+    sudo apt-get -y install php$version-memcached
+    sudo apt-get -y install php$version-json
+    sudo apt-get -y install php$version-zip
+    sudo apt-get -y install php$version-xml
+    sudo apt-get -y install php$version-soap
+    sudo apt-get -y install php$version-gd
+    sudo apt-get -y install php$version-imagick
+    sudo apt-get -y install php$version-fileinfo
+    sudo apt-get -y install php$version-imap
+    sudo apt-get -y install php$version-cli
+    
+    # Create PHP configuration
+    PHPINI=/etc/php/$version/fpm/conf.d/cipi.ini
+    sudo touch $PHPINI
+    sudo cat > "$PHPINI" <<EOF
 memory_limit = 256M
 upload_max_filesize = 256M
 post_max_size = 256M
 max_execution_time = 180
 max_input_time = 180
 EOF
-sudo service php7.4-fpm restart
+    sudo systemctl restart php$version-fpm
+}
 
-sudo apt-get -y install php8.0-fpm
-sudo apt-get -y install php8.0-common
-sudo apt-get -y install php8.0-curl
-sudo apt-get -y install php8.0-openssl
-sudo apt-get -y install php8.0-bcmath
-sudo apt-get -y install php8.0-mbstring
-sudo apt-get -y install php8.0-tokenizer
-sudo apt-get -y install php8.0-mysql
-sudo apt-get -y install php8.0-sqlite3
-sudo apt-get -y install php8.0-pgsql
-sudo apt-get -y install php8.0-redis
-sudo apt-get -y install php8.0-memcached
-sudo apt-get -y install php8.0-json
-sudo apt-get -y install php8.0-zip
-sudo apt-get -y install php8.0-xml
-sudo apt-get -y install php8.0-soap
-sudo apt-get -y install php8.0-gd
-sudo apt-get -y install php8.0-imagick
-sudo apt-get -y install php8.0-fileinfo
-sudo apt-get -y install php8.0-imap
-sudo apt-get -y install php8.0-cli
-PHPINI=/etc/php/8.0/fpm/conf.d/cipi.ini
-sudo touch $PHPINI
-sudo cat > "$PHPINI" <<EOF
-memory_limit = 256M
-upload_max_filesize = 256M
-post_max_size = 256M
-max_execution_time = 180
-max_input_time = 180
-EOF
-sudo service php8.0-fpm restart
-
-sudo apt-get -y install php8.1-fpm
-sudo apt-get -y install php8.1-common
-sudo apt-get -y install php8.1-curl
-sudo apt-get -y install php8.1-openssl
-sudo apt-get -y install php8.1-bcmath
-sudo apt-get -y install php8.1-mbstring
-sudo apt-get -y install php8.1-tokenizer
-sudo apt-get -y install php8.1-mysql
-sudo apt-get -y install php8.1-sqlite3
-sudo apt-get -y install php8.1-pgsql
-sudo apt-get -y install php8.1-redis
-sudo apt-get -y install php8.1-memcached
-sudo apt-get -y install php8.1-json
-sudo apt-get -y install php8.1-zip
-sudo apt-get -y install php8.1-xml
-sudo apt-get -y install php8.1-soap
-sudo apt-get -y install php8.1-gd
-sudo apt-get -y install php8.1-imagick
-sudo apt-get -y install php8.1-fileinfo
-sudo apt-get -y install php8.1-imap
-sudo apt-get -y install php8.1-cli
-PHPINI=/etc/php/8.1/fpm/conf.d/cipi.ini
-sudo touch $PHPINI
-sudo cat > "$PHPINI" <<EOF
-memory_limit = 256M
-upload_max_filesize = 256M
-post_max_size = 256M
-max_execution_time = 180
-max_input_time = 180
-EOF
-sudo service php8.1-fpm restart
+# Install PHP versions (7.4 is EOL but keeping for compatibility)
+install_php_version "7.4"
+install_php_version "8.0"
+install_php_version "8.1"
+install_php_version "8.2"
+install_php_version "8.3"
+install_php_version "8.4"
 
 # PHP EXTRA
 sudo apt-get -y install php-dev php-pear
 
-
-# PHP CLI
+# PHP CLI - Set default to PHP 8.4
 clear
 echo "${bggreen}${black}${bold}"
 echo "PHP CLI configuration..."
 echo "${reset}"
 sleep 1s
 
-sudo update-alternatives --set php /usr/bin/php8.0
-
-
+sudo update-alternatives --set php /usr/bin/php8.4
 
 # COMPOSER
 clear
@@ -366,9 +302,6 @@ php -r "unlink('composer-setup.php');"
 mv composer.phar /usr/local/bin/composer
 composer config --global repo.packagist composer https://packagist.org --no-interaction
 
-
-
-
 # GIT
 clear
 echo "${bggreen}${black}${bold}"
@@ -378,8 +311,6 @@ sleep 1s
 
 sudo apt-get -y install git
 sudo ssh-keygen -t rsa -C "git@github.com" -f /etc/cipi/github -q -P ""
-
-
 
 # SUPERVISOR
 clear
@@ -391,8 +322,6 @@ sleep 1s
 sudo apt-get -y install supervisor
 service supervisor restart
 
-
-
 # DEFAULT VHOST
 clear
 echo "${bggreen}${black}${bold}"
@@ -402,7 +331,7 @@ sleep 1s
 
 NGINX=/etc/nginx/sites-available/default
 if test -f "$NGINX"; then
-    sudo unlink NGINX
+    sudo rm -f $NGINX
 fi
 sudo touch $NGINX
 sudo cat > "$NGINX" <<EOF
@@ -427,19 +356,15 @@ server {
     error_page 404 /index.php;
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.0-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
     }
     location ~ /\.(?!well-known).* {
         deny all;
     }
 }
 EOF
-sudo mkdir /etc/nginx/cipi/
+sudo mkdir -p /etc/nginx/cipi/
 sudo systemctl restart nginx.service
-
-
-
-
 
 # MYSQL
 clear
@@ -447,7 +372,6 @@ echo "${bggreen}${black}${bold}"
 echo "MySQL setup..."
 echo "${reset}"
 sleep 1s
-
 
 sudo apt-get install -y mysql-server
 SECURE_MYSQL=$(expect -c "
@@ -477,8 +401,6 @@ GRANT ALL PRIVILEGES ON *.* TO 'cipi'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
 
-
-
 # REDIS
 clear
 echo "${bggreen}${black}${bold}"
@@ -490,8 +412,6 @@ sudo apt install -y redis-server
 sudo rpl -i -w "supervised no" "supervised systemd" /etc/redis/redis.conf
 sudo systemctl restart redis.service
 
-
-
 # LET'S ENCRYPT
 clear
 echo "${bggreen}${black}${bold}"
@@ -502,8 +422,6 @@ sleep 1s
 sudo apt-get install -y certbot
 sudo apt-get install -y python3-certbot-nginx
 
-
-
 # NODE
 clear
 echo "${bggreen}${black}${bold}"
@@ -511,29 +429,19 @@ echo "Node/npm setup..."
 echo "${reset}"
 sleep 1s
 
-curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | sudo apt-key add -
-curl -sL https://deb.nodesource.com/setup16.x | sudo -E bash -
-NODE=/etc/apt/sources.list.d/nodesource.list
-sudo unlink NODE
-sudo touch $NODE
-sudo cat > "$NODE" <<EOF
-deb https://deb.nodesource.com/node_16.x focal main
-deb-src https://deb.nodesource.com/node_16.x focal main
-EOF
+# Install Node.js 20.x (LTS)
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x $UBUNTU_CODENAME main" | sudo tee /etc/apt/sources.list.d/nodesource.list
 sudo apt-get update
 sudo apt -y install nodejs
 sudo apt -y install npm
 
-
-
-
-#PANEL INSTALLATION
+# PANEL INSTALLATION
 clear
 echo "${bggreen}${black}${bold}"
 echo "Panel installation..."
 echo "${reset}"
 sleep 1s
-
 
 /usr/bin/mysql -u root -p$DBPASS <<EOF
 CREATE DATABASE IF NOT EXISTS cipi;
@@ -544,7 +452,7 @@ cd /var/www && git clone https://github.com/$REPO.git html
 cd /var/www/html && git pull
 cd /var/www/html && git checkout $BRANCH
 cd /var/www/html && git pull
-cd /var/www/html && sudo unlink .env
+cd /var/www/html && sudo rm -f .env
 cd /var/www/html && sudo cp .env.example .env
 cd /var/www/html && php artisan key:generate
 sudo rpl -i -w "DB_USERNAME=dbuser" "DB_USERNAME=cipi" /var/www/html/.env
@@ -589,8 +497,6 @@ sudo chmod -R 775 /var/www/html/storage
 sudo chmod -R o+w /var/www/html/bootstrap/cache
 sudo chmod -R 775 /var/www/html/bootstrap/cache
 sudo chown -R www-data:cipi /var/www/html
-
-
 
 # LAST STEPS
 clear
@@ -652,14 +558,15 @@ echo "Cipi installation has been completed..."
 echo "${reset}"
 sleep 1s
 
-
-
-
 # SETUP COMPLETE MESSAGE
 clear
 echo "***********************************************************"
 echo "                    SETUP COMPLETE"
 echo "***********************************************************"
+echo ""
+echo " Ubuntu Version: $UBUNTU_VERSION ($UBUNTU_CODENAME)"
+echo " PHP Versions: 7.4, 8.0, 8.1, 8.2, 8.3, 8.4 (Default: 8.4)"
+echo " Node.js Version: $(node --version)"
 echo ""
 echo " SSH root user: cipi"
 echo " SSH root pass: $PASS"
